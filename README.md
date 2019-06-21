@@ -2,20 +2,20 @@
 A minimal event management system that uses custom attributes to automatically register event handlers
 
 ## Features
-- Manage Signal listener registration at the component level.
+- **Manage Signal listener registration at the component level.
 
     - SimpleSignals automatically creates listener delegates for any component you register with the SignalManager. This way you don't have to write code to bind each listener individually.
 
     - SimpleSignals automatically removes listener delegates when it detects the target has been destroyed, so you don't have to write that code either.
 
-- SimpleSignals uses delegats to bind Signals to their listeners.
+- **SimpleSignals uses delegats to bind Signals to their listeners.
 
     - Unity's built in `SendMessage()` and `BroadcastMessage()` are intended for rapid prototyping and are designed to be flexible rather than performant. Unity reccomends using C#'s native delegates/Events in production code.
 
     - Type information about listener classes is cached so registering subsequent instances of the same class/component uses an efficent look up.
 
-- Signals are strongly typed and define their required parameters (including nullable types).
-- Supports multiple `SignalContexts` so you can constrain what signals are available in what contexts (if your application has become complex enough to require it).
+- **Signals are strongly typed and define their required parameters (including nullable types).
+- **Supports multiple `SignalContexts` so you can constrain what signals are available in what contexts (if your application has become complex enough to require it).
 
 ## Usage
 Create an instance of a SignalManager that you want to register Signals and listners with. 
