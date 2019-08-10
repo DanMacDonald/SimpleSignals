@@ -26,7 +26,7 @@ Create an instance of a SignalManager that you want to register Signals and list
 ```
 // Create an instance of the SignalManager
 this.signalManager = this.AddComponent<SignalManager>();
-SignalManager.RegisterSignalTypes(); // Note: you can specify an optional SignalContext as a parameter
+SignalManager.RegisterSignalTypes(); // Optionally provde a SignalContext parameter
 ```
 
 Next, define some Signals that you want to be able to `Invoke()` and that classes/components can listen to by providing a listener method. Becase Signals are strongly typed and they define the types of their parameters it makes it easy for programmers to know what parameters they need to impelment in their Signal Listener methods.
