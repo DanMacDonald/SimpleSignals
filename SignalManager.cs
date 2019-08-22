@@ -125,7 +125,7 @@ namespace SimpleSignals
 		///</summary>
 		private List<Type> GetAllSubclassesOf(Type baseType) 
 		{ 
-			return Assembly.GetAssembly(baseType).GetTypes(). Where(type => type.IsSubclassOf(baseType)).ToList(); 
+			return AppDomain.CurrentDomain.GetAssemblies().SelectMany(s => s.GetTypes()).Where(type => type.IsSubclassOf(baseType)).ToList();
 		}
 	}
 	
