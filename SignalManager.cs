@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2017 Dan MacDonald
+Copyright (c) 2019 Dan MacDonald
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation 
 files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy,
@@ -180,7 +180,7 @@ namespace SimpleSignals
 		public void Invoke<T>(params object[] list) where T : Signal
 		{
 			Signal signal = this.GetSignal<T>();
-			if(list == null || list.Length==0)
+			if(signal.ParameterCount == 0)
 			{
 				signal.Invoke();
 			}
@@ -190,9 +190,17 @@ namespace SimpleSignals
 				{
 					((T)signal).Invoke(list);
 				}
-				catch(InvalidCastException)
+				catch(InvalidCastException e)
 				{
-					Debug.LogError("InvalidCastException - The type of an Invoke(...) parameter did not match the type(s) specified by the Signal.  Please check your Invoke(...) parameters to see that they match.");
+					Debug.LogError("The type of an Invoke() argument did not match the type defined in the Signal.\nPlease check your Invoke() argument to see that they match the ones defined by " + e.TargetSite.DeclaringType);
+				}
+				catch(IndexOutOfRangeException)
+				{
+					Debug.LogError(signal.GetType().ToString() + " Expected " + signal.ParameterCount + " Invalid number of arguments provided to Invoke().");
+				}
+				catch (NullReferenceException)
+				{
+					Debug.LogError("You provided a NULL argument for a prameter than cannot be null.\nCheck your Invoke<" + signal.GetType().ToString() +">() arguments and make sure you're not passing NULL for a parameter with a value type.");
 				}
 			}
 		}
@@ -369,12 +377,14 @@ namespace SimpleSignals
 		void AddListener(Delegate d, ListenerType t);
 		void RemoveListener(Delegate d);
 		Type GetListenerType();
+		int ParameterCount { get; }
 	}
 
 	// Base/Simple Signal with no parameters 
 	public class Signal : ISignal
 	{
 		public delegate void SignalDelegate();
+		virtual public int ParameterCount { get { return 0;} }
 		protected List<SignalListenerItem> listeners = new List<SignalListenerItem> ();
 		protected List<SignalListenerItem> listenersToRemove = new List<SignalListenerItem>();
 
@@ -459,6 +469,7 @@ namespace SimpleSignals
 	public class Signal<T> : Signal, ISignal
 	{
 		new public delegate void SignalDelegate(T param1);
+		override public int ParameterCount { get { return 1;} }
 		public void Invoke(T param1) 
 		{ 
 			foreach(var listener in listeners)
@@ -469,7 +480,13 @@ namespace SimpleSignals
 
 			RemoveDiscardedSignalListenerItems();
 		}
-		override public void Invoke(params object[] list) { this.Invoke((T)list[0]); }
+		override public void Invoke(params object[] list) 
+		{
+			if (list != null)
+				this.Invoke((T)list[0]); 
+			else
+				this.Invoke(default(T));
+		}
 		override protected void InternalAdd(Delegate listener, ListenerType listenerType){ this.listeners.Add(new SignalListenerItem() { SignalDelegate=(SignalDelegate)listener, ListenerType=listenerType});}
 		override public Type GetListenerType() { return typeof(SignalDelegate); }
 	}
@@ -478,6 +495,7 @@ namespace SimpleSignals
 	public class Signal<T1,T2> : Signal, ISignal
 	{
 		new public delegate void SignalDelegate(T1 param1,T2 param2);
+		override public int ParameterCount { get { return 2;} }
 		public void Invoke(T1 param1,T2 param2) 
 		{ 
 			foreach(var listener in listeners)
@@ -488,7 +506,17 @@ namespace SimpleSignals
 			RemoveDiscardedSignalListenerItems();
 		}
 
-		override public void Invoke(params object[] list) { this.Invoke((T1)list[0],(T2)list[1]); }
+		override public void Invoke(params object[] list) 
+		{
+			if (list != null)
+			{
+				T1 arg1 = (T1)list[0];
+				T2 arg2 = (T2)list[1];
+				this.Invoke(arg1, arg2);
+			}
+			else
+				this.Invoke(default(T1), default(T2));
+		}
 		override protected void InternalAdd(Delegate listener, ListenerType listenerType){ this.listeners.Add(new SignalListenerItem() { SignalDelegate=(SignalDelegate)listener, ListenerType=listenerType});}
 		override public Type GetListenerType() { return typeof(SignalDelegate); }
 	}
@@ -497,6 +525,7 @@ namespace SimpleSignals
 	public class Signal<T1,T2,T3> : Signal, ISignal
 	{
 		new public delegate void SignalDelegate(T1 param1,T2 param2,T3 param3);
+		override public int ParameterCount { get { return 3;} }
 		public void Invoke(T1 param1, T2 param2, T3 param3) 
 		{ 
 			foreach(var listener in listeners)
@@ -506,7 +535,18 @@ namespace SimpleSignals
 			}
 			RemoveDiscardedSignalListenerItems();
 		}
-		override public void Invoke(params object[] list) { this.Invoke((T1)list[0],(T2)list[1],(T2)list[2]); }
+		override public void Invoke(params object[] list) 
+		{
+			if (list != null)
+			{
+				T1 arg1 = (T1)list[0];
+				T2 arg2 = (T2)list[1];
+				T3 arg3 = (T3)list[2];
+				this.Invoke(arg1, arg2, arg3);
+			}
+			else
+				this.Invoke(default(T1), default(T2), default(T3));
+		}
 		override protected void InternalAdd(Delegate listener, ListenerType listenerType){ this.listeners.Add(new SignalListenerItem() { SignalDelegate=(SignalDelegate)listener, ListenerType=listenerType});}
 		override public Type GetListenerType() { return typeof(SignalDelegate); }
 	}
@@ -515,6 +555,7 @@ namespace SimpleSignals
 	public class Signal<T1,T2,T3,T4> : Signal, ISignal
 	{
 		new public delegate void SignalDelegate(T1 param1,T2 param2,T3 param3,T4 param4);
+		override public int ParameterCount { get { return 4;} }
 		public void Invoke(T1 param1,T2 param2,T3 param3,T4 param4) 
 		{ 
 			foreach(var listener in listeners)
@@ -524,7 +565,19 @@ namespace SimpleSignals
 			}
 			RemoveDiscardedSignalListenerItems();
 		}
-		override public void Invoke(params object[] list) { this.Invoke((T1)list[0],(T2)list[1],(T2)list[2],(T3)list[3]); }
+		override public void Invoke(params object[] list)
+		{
+			if (list != null)
+			{
+				T1 arg1 = (T1)list[0];
+				T2 arg2 = (T2)list[1];
+				T3 arg3 = (T3)list[2];
+				T4 arg4 = (T4)list[3];
+				this.Invoke(arg1, arg2, arg3, arg4);
+			}
+			else
+				this.Invoke(default(T1), default(T2), default(T3), default(T4));
+		}
 		override protected void InternalAdd(Delegate listener, ListenerType listenerType){ this.listeners.Add(new SignalListenerItem() { SignalDelegate=(SignalDelegate)listener, ListenerType=listenerType});}
 		override public Type GetListenerType() { return typeof(SignalDelegate); }
 	}
