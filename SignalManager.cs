@@ -192,15 +192,11 @@ namespace SimpleSignals
 				}
 				catch(InvalidCastException e)
 				{
-					Debug.LogError("The type of an Invoke() argument did not match the type defined in the Signal.\nPlease check your Invoke() argument to see that they match the ones defined by " + e.TargetSite.DeclaringType);
+					throw new InvalidCastException("The type of an Invoke() argument did not match the type defined in the Signal.\nPlease check your Invoke() argument to see that they match the ones defined by " + e.TargetSite.DeclaringType);
 				}
 				catch(IndexOutOfRangeException)
 				{
-					Debug.LogError(signal.GetType().ToString() + " Expected " + signal.ParameterCount + " Invalid number of arguments provided to Invoke().");
-				}
-				catch (NullReferenceException)
-				{
-					Debug.LogError("You provided a NULL argument for a prameter than cannot be null.\nCheck your Invoke<" + signal.GetType().ToString() +">() arguments and make sure you're not passing NULL for a parameter with a value type.");
+					throw new ArgumentException(signal.GetType().ToString() + " Expected " + signal.ParameterCount + " Invalid number of arguments provided to Invoke().");
 				}
 			}
 		}
@@ -510,8 +506,12 @@ namespace SimpleSignals
 		{
 			if (list != null)
 			{
-				T1 arg1 = (T1)list[0];
-				T2 arg2 = (T2)list[1];
+				T1 arg1; T2 arg2;
+				try { arg1 = (T1)list[0]; arg2 = (T2)list[1];}
+				catch (NullReferenceException)
+				{
+					throw new ArgumentException("You provided a NULL argument for a prameter than cannot be null.\nCheck your Invoke<" + this.GetType().ToString() +">() arguments and make sure you're not passing NULL for a parameter with a value type.");
+				}
 				this.Invoke(arg1, arg2);
 			}
 			else
@@ -539,9 +539,12 @@ namespace SimpleSignals
 		{
 			if (list != null)
 			{
-				T1 arg1 = (T1)list[0];
-				T2 arg2 = (T2)list[1];
-				T3 arg3 = (T3)list[2];
+				T1 arg1; T2 arg2; T3 arg3;
+				try { arg1 = (T1)list[0]; arg2 = (T2)list[1]; arg3 = (T3)list[2]; }
+				catch (NullReferenceException)
+				{
+					throw new ArgumentException("You provided a NULL argument for a prameter than cannot be null.\nCheck your Invoke<" + this.GetType().ToString() +">() arguments and make sure you're not passing NULL for a parameter with a value type.");
+				}
 				this.Invoke(arg1, arg2, arg3);
 			}
 			else
@@ -569,10 +572,12 @@ namespace SimpleSignals
 		{
 			if (list != null)
 			{
-				T1 arg1 = (T1)list[0];
-				T2 arg2 = (T2)list[1];
-				T3 arg3 = (T3)list[2];
-				T4 arg4 = (T4)list[3];
+				T1 arg1; T2 arg2; T3 arg3; T4 arg4;
+				try { arg1 = (T1)list[0]; arg2 = (T2)list[1]; arg3 = (T3)list[2]; arg4 = (T4)list[3]; }
+				catch (NullReferenceException)
+				{
+					throw new ArgumentException("You provided a NULL argument for a prameter than cannot be null.\nCheck your Invoke<" + this.GetType().ToString() +">() arguments and make sure you're not passing NULL for a parameter with a value type.");
+				}
 				this.Invoke(arg1, arg2, arg3, arg4);
 			}
 			else
