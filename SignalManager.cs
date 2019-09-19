@@ -158,6 +158,10 @@ namespace SimpleSignals
 		// MethodInfo cache so we aren't slow every time we register callbacks for an object
 		private Dictionary<Type, IEnumerable<MethodInfo>> methodInfoCache = new Dictionary<Type, IEnumerable<MethodInfo>>();
 
+		// List of objects to unbind, this enables the signal manager to unbind objects during an Invoke(), without breaking collection enumeration
+		private List<System.Object> objectsToUnbind = new List<System.Object>(1);
+		private bool isInvoking = false;
+
 		///<summary>
 		/// Assigns a SignalContext to this SignalManager instance and calls its OnRegister() method.
 		///</summary>
@@ -179,6 +183,7 @@ namespace SimpleSignals
 
 		public void Invoke<T>(params object[] list) where T : Signal
 		{
+			isInvoking = true;
 			Signal signal = this.GetSignal<T>();
 			if(signal.ParameterCount == 0)
 			{
@@ -192,8 +197,18 @@ namespace SimpleSignals
 				}
 				catch(InvalidCastException e)
 				{
+					isInvoking = false;
 					throw new InvalidCastException("The type of an Invoke() argument did not match the type defined in the Signal.\nPlease check your Invoke() argument to see that they match the ones defined by " + e.TargetSite.DeclaringType);
 				}				
+			}
+			isInvoking = false;
+
+			// If objects were unbound during the invoke, now's the time to unbind them
+			if (this.objectsToUnbind.Count > 0 ) {
+				foreach (var obj in this.objectsToUnbind) {
+					this.UnbindSignals(obj);
+				}
+				objectsToUnbind.Clear();
 			}
 		}
 
@@ -222,7 +237,11 @@ namespace SimpleSignals
 		{
 			if(signalManager != null)
 			{
-				signalManager.UnbindSignals(listenerObject);
+				if (signalManager.isInvoking) {
+					signalManager.objectsToUnbind.Add(listenerObject);
+				} else {
+					signalManager.UnbindSignals(listenerObject);
+				}
 			}
 		}
 		
@@ -410,6 +429,12 @@ namespace SimpleSignals
 			this.listeners.Add(new SignalListenerItem() { SignalDelegate=(SignalDelegate)listener, ListenerType=listenerType});
 		}
 
+		/// <summary>
+		/// Note: This method validates that the target listener object is still around, if the
+		/// listener object is null, it removes any delegates bound to that object. This is the 
+		/// only part of the code that is Unity specific. If you'd like to us SimpleSignals in 
+		/// a vanilla C# enviornment, this is the only method that needs to be tweaked.
+		/// </summary>
 		protected bool ValidateSignalListener(SignalListenerItem listener)
 		{
 			MonoBehaviour targetGO = (MonoBehaviour)listener.SignalDelegate.Target;
@@ -422,6 +447,7 @@ namespace SimpleSignals
 				this.listenersToRemove.Add(listener);
 			}
 
+			// This listener delegate will be removed after it's invoked
 			if(listener.ListenerType == ListenerType.Once)
 				this.listenersToRemove.Add(listener);
 
