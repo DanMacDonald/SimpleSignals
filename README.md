@@ -1,5 +1,5 @@
 # SimpleSignals
-A minimal event management system that uses custom attributes to automatically register event handlers
+A minimal event system that manages event listeners automatically (using custom attributes).
 
 ## Features
 - **Register a component to bind all of its Singnal Listener methods**
