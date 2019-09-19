@@ -193,11 +193,7 @@ namespace SimpleSignals
 				catch(InvalidCastException e)
 				{
 					throw new InvalidCastException("The type of an Invoke() argument did not match the type defined in the Signal.\nPlease check your Invoke() argument to see that they match the ones defined by " + e.TargetSite.DeclaringType);
-				}
-				catch(IndexOutOfRangeException)
-				{
-					throw new ArgumentException(signal.GetType().ToString() + " Expected " + signal.ParameterCount + " Invalid number of arguments provided to Invoke().");
-				}
+				}				
 			}
 		}
 
@@ -512,6 +508,10 @@ namespace SimpleSignals
 				{
 					throw new ArgumentException("You provided a NULL argument for a prameter than cannot be null.\nCheck your Invoke<" + this.GetType().ToString() +">() arguments and make sure you're not passing NULL for a parameter with a value type.");
 				}
+				catch(IndexOutOfRangeException)
+				{
+					throw new ArgumentException("Incorrect number of arguments provided to Invoke<" + GetType() + ">().\nExpected " + ParameterCount + " arguments but " + list.Length + " arguments were provided.");
+				}
 				this.Invoke(arg1, arg2);
 			}
 			else
@@ -545,6 +545,10 @@ namespace SimpleSignals
 				{
 					throw new ArgumentException("You provided a NULL argument for a prameter than cannot be null.\nCheck your Invoke<" + this.GetType().ToString() +">() arguments and make sure you're not passing NULL for a parameter with a value type.");
 				}
+				catch(IndexOutOfRangeException)
+				{
+					throw new ArgumentException("Incorrect number of arguments provided to Invoke<" + GetType() + ">().\nExpected " + ParameterCount + " arguments but " + list.Length + " arguments were provided.");
+				}
 				this.Invoke(arg1, arg2, arg3);
 			}
 			else
@@ -577,6 +581,10 @@ namespace SimpleSignals
 				catch (NullReferenceException)
 				{
 					throw new ArgumentException("You provided a NULL argument for a prameter than cannot be null.\nCheck your Invoke<" + this.GetType().ToString() +">() arguments and make sure you're not passing NULL for a parameter with a value type.");
+				}
+				catch(IndexOutOfRangeException)
+				{
+					throw new ArgumentException("Incorrect number of arguments provided to Invoke<" + GetType() + ">().\nExpected " + ParameterCount + " arguments but " + list.Length + " arguments were provided.");
 				}
 				this.Invoke(arg1, arg2, arg3, arg4);
 			}
