@@ -310,7 +310,7 @@ namespace SimpleSignals
 					}
 					else
 					{
-						Debug.LogError("Could not map " + listenTo.SignalType + " from " + listenerObjectType + " to any Signal in the SignalContext");
+						throw new InvalidOperationException("Unable to Bind Singals for an instance of '" + listenerObjectType + "'. The Signal '" + listenTo.SignalType + "' is not registered with the SignalManager.");
 					}
 				}
 			}
