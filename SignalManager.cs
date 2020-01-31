@@ -292,21 +292,28 @@ namespace SimpleSignals
 					// Get an ISignal reference from the signalContext based on the SignalType
 					ISignal signal = this.SignalContext.GetSignal(listenTo.SignalType);
 					if(signal != null)
-					{			
-						// Create a callback listener for this methodInfo
-						Delegate d = Delegate.CreateDelegate(signal.GetListenerType(), listenerObject, methodInfo);
-						signal.AddListener(d, listenTo.ListenerType);
-
-						// Add the signal listener to the internal list of delegates associated with the listenerObject
-						// ( so we can easily unbind all the signal listeners later. )
-						List<SignalListener> delegateList = null;
-						if(this.signalListenersByObject.TryGetValue(listenerObject, out delegateList) == false)
+					{	
+						try
 						{
-                            //Debug.Log("adding signal listener:" + methodInfo.Name + " for " + listenerObjectType);
-							delegateList = new List<SignalListener>();
-							this.signalListenersByObject[listenerObject] = delegateList;
+							// Create a callback listener for this methodInfo
+							Delegate d = Delegate.CreateDelegate(signal.GetListenerType(), listenerObject, methodInfo);
+							signal.AddListener(d, listenTo.ListenerType);
+
+							// Add the signal listener to the internal list of delegates associated with the listenerObject
+							// ( so we can easily unbind all the signal listeners later. )
+							List<SignalListener> delegateList = null;
+							if(this.signalListenersByObject.TryGetValue(listenerObject, out delegateList) == false)
+							{
+				    //Debug.Log("adding signal listener:" + methodInfo.Name + " for " + listenerObjectType);
+								delegateList = new List<SignalListener>();
+								this.signalListenersByObject[listenerObject] = delegateList;
+							}
+							delegateList.Add(new SignalListener(signal, d));
 						}
-						delegateList.Add(new SignalListener(signal, d));
+						catch (ArgumentException)
+						{
+							throw new InvalidOperationException("SignalManager was unable to bind the [ListenTo(typeof(" + listenTo.SignalType + "))] signal to its listener method.\nThe method exposes the wrong number of parameters, expected " + signal.ParameterCount + " but found "+ methodInfo.GetParameters().Count() + ".");
+						}
 					}
 					else
 					{
