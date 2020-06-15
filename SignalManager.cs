@@ -191,6 +191,12 @@ namespace SimpleSignals
 			}
 			else
 			{
+				if (list.Length != signal.ParameterCount)
+				{	
+					isInvoking = false;
+					throw new InvalidOperationException ("Incorrect number of arguments passed to Invoke(). Please make sure to provide arguments for all parameters defined by " +  signal.GetType().Name);
+				}
+
 				try
 				{
 					((T)signal).Invoke(list);
