@@ -185,6 +185,12 @@ namespace SimpleSignals
 		{
 			isInvoking = true;
 			Signal signal = this.GetSignal<T>();
+
+			if (signal == null)
+			{
+				throw new InvalidOperationException("Signal:" + typeof(T) + " is not registered with the SignalContext. Please register the signal before invoking it." );
+			}
+
 			if(signal.ParameterCount == 0)
 			{
 				signal.Invoke();
