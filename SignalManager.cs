@@ -197,7 +197,7 @@ namespace SimpleSignals
 			}
 			else
 			{
-				if (list.Length != signal.ParameterCount)
+				if (list != null && list.Length == 0)
 				{	
 					isInvoking = false;
 					throw new InvalidOperationException ("Incorrect number of arguments passed to Invoke(). Please make sure to provide arguments for all parameters defined by " +  signal.GetType().Name);
@@ -210,7 +210,7 @@ namespace SimpleSignals
 				catch(InvalidCastException e)
 				{
 					isInvoking = false;
-					throw new InvalidCastException("The type of an Invoke() argument did not match the type defined in the Signal.\nPlease check your Invoke() argument to see that they match the ones defined by " + e.TargetSite.DeclaringType);
+					throw new InvalidCastException("The type of an Invoke() argument did not match the type defined in the Signal.\nPlease check your Invoke() argument to see that they match the ones defined by " + signal.GetType().Name);
 				}				
 			}
 			isInvoking = false;
@@ -304,7 +304,7 @@ namespace SimpleSignals
 					// Get an ISignal reference from the signalContext based on the SignalType
 					ISignal signal = this.SignalContext.GetSignal(listenTo.SignalType);
 					if(signal != null)
-					{	
+					{
 						try
 						{
 							// Create a callback listener for this methodInfo
@@ -316,7 +316,7 @@ namespace SimpleSignals
 							List<SignalListener> delegateList = null;
 							if(this.signalListenersByObject.TryGetValue(listenerObject, out delegateList) == false)
 							{
-				    //Debug.Log("adding signal listener:" + methodInfo.Name + " for " + listenerObjectType);
+				    			//Debug.Log("adding signal listener:" + methodInfo.Name + " for " + listenerObjectType);
 								delegateList = new List<SignalListener>();
 								this.signalListenersByObject[listenerObject] = delegateList;
 							}
@@ -640,4 +640,3 @@ namespace SimpleSignals
 		override public Type GetListenerType() { return typeof(SignalDelegate); }
 	}
 }
-	
