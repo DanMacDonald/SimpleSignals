@@ -210,7 +210,14 @@ namespace SimpleSignals
 				catch(InvalidCastException e)
 				{
 					isInvoking = false;
-					throw new InvalidCastException("The type of an Invoke() argument did not match the type defined in the Signal.\nPlease check your Invoke() argument to see that they match the ones defined by " + signal.GetType().Name);
+					if (e.TargetSite.Name == "Invoke")
+					{
+						throw new InvalidCastException("Invoke() argument was an invalid type. It did not match the parameter type defined in the Signal.\nPlease check your Invoke() argument(s) to see that they match the parameter(s) defined by " + signal.GetType().Name);
+					}
+					else
+					{
+						throw;
+					}
 				}				
 			}
 			isInvoking = false;
