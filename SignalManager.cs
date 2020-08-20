@@ -463,15 +463,23 @@ namespace SimpleSignals
 		/// </summary>
 		protected bool ValidateSignalListener(SignalListenerItem listener)
 		{
-			MonoBehaviour targetGO = (MonoBehaviour)listener.SignalDelegate.Target;
 			bool isInvokable = true;
+			object target = listener.SignalDelegate.Target;
 
-			// Don't invoke listeners on destroyed GameObjects instead Clean up listeners
-			if( targetGO == null && !ReferenceEquals(targetGO, null))
+			// <UnitySpecific>
+			// Comment this code out if you're not using MonoBehaviors
+			if (target is MonoBehaviour)
 			{
-				isInvokable = false;
-				this.listenersToRemove.Add(listener);
+				MonoBehaviour targetGO = (MonoBehaviour)target;
+
+				// Don't invoke listeners on destroyed GameObjects instead Clean up listeners
+				if( targetGO == null && !ReferenceEquals(targetGO, null))
+				{
+					isInvokable = false;
+					this.listenersToRemove.Add(listener);
+				}
 			}
+			// </UnitySpecific>
 
 			// This listener delegate will be removed after it's invoked
 			if(listener.ListenerType == ListenerType.Once)
