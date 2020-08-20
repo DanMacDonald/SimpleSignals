@@ -293,7 +293,7 @@ namespace SimpleSignals
 			if(this.methodInfoCache.TryGetValue(listenerObjectType, out methodInfos) == false)
 			{
 				// If you REEAALLLLY have to, use reflection to look up the methodInfos and cache them
-				methodInfos = listenerObjectType.GetMethods();
+				methodInfos = listenerObjectType.GetMethods(BindingFlags.Public|BindingFlags.NonPublic|BindingFlags.Instance|BindingFlags.DeclaredOnly);
 				this.methodInfoCache[listenerObjectType] = methodInfos;
 			}
 
