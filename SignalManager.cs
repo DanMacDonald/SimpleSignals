@@ -188,7 +188,7 @@ namespace SimpleSignals
 
 			if (signal == null)
 			{
-				throw new InvalidOperationException("Signal:" + typeof(T) + " is not registered with the SignalContext. Please register the signal before invoking it." );
+				throw new InvalidOperationException($"Signal: { typeof(T) } is not registered with the SignalContext. Please register the signal before invoking it." );
 			}
 
 			if(signal.ParameterCount == 0)
@@ -200,7 +200,7 @@ namespace SimpleSignals
 				if (list != null && list.Length == 0)
 				{	
 					isInvoking = false;
-					throw new InvalidOperationException ("Incorrect number of arguments passed to Invoke(). Please make sure to provide arguments for all parameters defined by " +  signal.GetType().Name);
+					throw new InvalidOperationException ($"Incorrect number of arguments passed to Invoke(). Please make sure to provide arguments for all parameters defined by { signal.GetType().Name }");
 				}
 
 				try
@@ -212,10 +212,13 @@ namespace SimpleSignals
 					isInvoking = false;
 					if (e.TargetSite.Name == "Invoke")
 					{
-						throw new InvalidCastException("Invoke() argument was an invalid type. It did not match the parameter type defined in the Signal.\nPlease check your Invoke() argument(s) to see that they match the parameter(s) defined by " + signal.GetType().Name);
+						throw new InvalidCastException($"Invoke() argument was an invalid type. It did not match the parameter type defined in the Signal.\nPlease check your Invoke() argument(s) to see that they match the parameter(s) defined by { signal.GetType().Name }");
 					}
 					else
 					{
+						// If there was an InvalidCastException that occured inside the body of the listener method,
+						// allow it to flow back to the host application unchanged. This preserves the line number and
+						// target site of the exception.
 						throw;
 					}
 				}				
@@ -331,12 +334,12 @@ namespace SimpleSignals
 						}
 						catch (ArgumentException)
 						{
-							throw new InvalidOperationException("SignalManager was unable to bind the [ListenTo(typeof(" + listenTo.SignalType + "))] signal to its listener method.\nThe method exposes the wrong number of parameters, expected " + signal.ParameterCount + " but found "+ methodInfo.GetParameters().Count() + ".");
+							throw new InvalidOperationException($"SignalManager was unable to bind the [ListenTo(typeof({ listenTo.SignalType }))]\nThe method exposes the wrong number of parameters, expected { signal.ParameterCount } but found { methodInfo.GetParameters().Count() }.");
 						}
 					}
 					else
 					{
-						throw new InvalidOperationException("Unable to Bind Singals for an instance of '" + listenerObjectType + "'. The Signal '" + listenTo.SignalType + "' is not registered with the SignalManager.");
+						throw new InvalidOperationException($"Unable to Bind Singals for an instance of '{ listenerObjectType }'. The Signal '{ listenTo.SignalType }' is not registered with the SignalManager.");
 					}
 				}
 			}
@@ -385,14 +388,14 @@ namespace SimpleSignals
 		{
 			if (signalType == null) 
 			{ 
-				throw new ArgumentNullException ("signalType"); 
+				throw new ArgumentNullException ("signalType is null"); 
 			}
 
 			this.SignalType = signalType;
 			this.ListenerType = listenerType;
 			if(typeof(ISignal).IsAssignableFrom(this.SignalType) == false)
 			{
-				throw new Exception("Attempted to bind to unknown signal. Did you mean to ListenTo " + this.SignalType +" ?");
+				throw new Exception($"Attempted to ListenTo an unregistered signal type. Did you mean to [ListenTo(typeof({ this.SignalType })] ?");
 			}
 		}
 	}
@@ -444,7 +447,7 @@ namespace SimpleSignals
 			{
 				if(listenerItem.SignalDelegate.Target == listener.Target && listenerItem.SignalDelegate.Method == listener.Method)
 				{
-					throw new Exception("Attempted to add a duplicate " + listener.Method.Name + " listener for " + listener.Target);
+					throw new Exception($"Attempted to add a duplicate { listener.Method.Name } listener for { listener.Target }");
 				}
 			}
 			InternalAdd(listener, listenerType);
@@ -566,11 +569,11 @@ namespace SimpleSignals
 				try { arg1 = (T1)list[0]; arg2 = (T2)list[1];}
 				catch (NullReferenceException)
 				{
-					throw new ArgumentException("You provided a NULL argument for a prameter than cannot be null.\nCheck your Invoke<" + this.GetType().ToString() +">() arguments and make sure you're not passing NULL for a parameter with a value type.");
+					throw new ArgumentException($"You provided a NULL argument for a prameter than cannot be null.\nCheck your Invoke<{ this.GetType().ToString() }>() arguments and make sure you're not passing NULL for a parameter with a value type.");
 				}
 				catch(IndexOutOfRangeException)
 				{
-					throw new ArgumentException("Incorrect number of arguments provided to Invoke<" + GetType() + ">().\nExpected " + ParameterCount + " arguments but " + list.Length + " arguments were provided.");
+					throw new ArgumentException($"Incorrect number of arguments provided to Invoke<{ GetType() }>().\nExpected { ParameterCount } arguments but { list.Length } arguments were provided.");
 				}
 				this.Invoke(arg1, arg2);
 			}
@@ -603,11 +606,11 @@ namespace SimpleSignals
 				try { arg1 = (T1)list[0]; arg2 = (T2)list[1]; arg3 = (T3)list[2]; }
 				catch (NullReferenceException)
 				{
-					throw new ArgumentException("You provided a NULL argument for a prameter than cannot be null.\nCheck your Invoke<" + this.GetType().ToString() +">() arguments and make sure you're not passing NULL for a parameter with a value type.");
+					throw new ArgumentException($"You provided a NULL argument for a prameter than cannot be null.\nCheck your Invoke<{ this.GetType().ToString() }>() arguments and make sure you're not passing NULL for a parameter with a value type.");
 				}
 				catch(IndexOutOfRangeException)
 				{
-					throw new ArgumentException("Incorrect number of arguments provided to Invoke<" + GetType() + ">().\nExpected " + ParameterCount + " arguments but " + list.Length + " arguments were provided.");
+					throw new ArgumentException($"Incorrect number of arguments provided to Invoke<{ GetType() }>().\nExpected { ParameterCount } arguments but { list.Length } arguments were provided.");
 				}
 				this.Invoke(arg1, arg2, arg3);
 			}
@@ -640,11 +643,11 @@ namespace SimpleSignals
 				try { arg1 = (T1)list[0]; arg2 = (T2)list[1]; arg3 = (T3)list[2]; arg4 = (T4)list[3]; }
 				catch (NullReferenceException)
 				{
-					throw new ArgumentException("You provided a NULL argument for a prameter than cannot be null.\nCheck your Invoke<" + this.GetType().ToString() +">() arguments and make sure you're not passing NULL for a parameter with a value type.");
+					throw new ArgumentException($"You provided a NULL argument for a prameter than cannot be null.\nCheck your Invoke<{ this.GetType().ToString() }>() arguments and make sure you're not passing NULL for a parameter with a value type.");
 				}
 				catch(IndexOutOfRangeException)
 				{
-					throw new ArgumentException("Incorrect number of arguments provided to Invoke<" + GetType() + ">().\nExpected " + ParameterCount + " arguments but " + list.Length + " arguments were provided.");
+					throw new ArgumentException($"Incorrect number of arguments provided to Invoke<{ GetType() }>().\nExpected { ParameterCount } arguments but { list.Length } arguments were provided.");
 				}
 				this.Invoke(arg1, arg2, arg3, arg4);
 			}
