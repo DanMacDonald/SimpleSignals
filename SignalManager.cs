@@ -16,13 +16,12 @@ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEAL
 */
 
 using UnityEngine;
-using System.Collections;
 using System.Collections.Generic;
 using System;
 using System.Reflection;
-using UnityEngine.EventSystems;
 using System.Linq;
-using System.Linq.Expressions;
+
+// From https://github.com/DanMacDonald/SimpleSignals/
 
 namespace SimpleSignals
 {
@@ -167,52 +166,103 @@ namespace SimpleSignals
 		///</summary>
 		public void RegisterSignalTypes(SignalContext signalContext=null)
 		{
+			if (this.SignalContext != null)
+				UnbindAllSignalListeners();
+
 			if(signalContext != null)
 			{
-				// Manual SignalType resitration
+				// Register only those Signals defined by the context
 				this.SignalContext = signalContext;
 				this.SignalContext.OnRegister();
 			}
 			else
 			{
-				// Auto signal type registration
+				// Automatically discover and register all the Signals found in the project
 				this.SignalContext = new SignalContext();
 				this.SignalContext.Register();
 			}
 		}
 
+		/// <summary>
+		/// When the SignalManager is boud to a new SignalContext, we need to
+		/// be able to unbind all the listeners bound to the existing SignalContext.
+		/// This frees all the existing listener references so we don't accumulate
+		/// references for signals that are no longer rgistered or have thoes orphaned
+		/// references holding onto their listener objects preventing GarbageCollection.
+		/// </summary>
+		void UnbindAllSignalListeners()
+		{
+			foreach(var listenerObj in signalListenersByObject.Keys)
+			{
+				objectsToUnbind.Add(listenerObj);
+			}
+
+			foreach (var obj in this.objectsToUnbind)
+			{
+				this.UnbindSignals(obj);
+			}
+			objectsToUnbind.Clear();
+			signalListenersByObject.Clear();
+		}
+
+		/// <summary>
+		/// This is the workhorse method for SignalManager at runtime. 
+		/// All signals get Invoked() though this entry point.
+		/// </summary>
 		public void Invoke<T>(params object[] list) where T : Signal
 		{
 			isInvoking = true;
 			Signal signal = this.GetSignal<T>();
 
 			if (signal == null)
-			{
-				throw new InvalidOperationException($"Signal: { typeof(T) } is not registered with the SignalContext. Please register the signal before invoking it." );
-			}
+				throw new InvalidOperationException($"The Signal `{ typeof(T).Name }` is not registered with the SignalMangers SignalContext. Please register the signal before invoking it." );
 
 			if(signal.ParameterCount == 0)
 			{
-				signal.Invoke();
+				if (list != null && list.Length != 0)
+				{
+					isInvoking = false;
+					throw new ArgumentException ($"Incorrect number of arguments passed to 'Invoke<{ signal.GetType().Name }>(...)'. Expected 0 arguments but you provided {list.Length} (or null).");
+				}
+
+				signal.Invoke(this);
 			}
 			else
 			{
-				if (list != null && list.Length == 0)
+				// Handle a special case for Signals with a single parameter, in that case if the parameter
+				// is a nullable type, and it is invoked with "null", the argument list will be null as well.
+				if ((list == null && signal.ParameterCount != 1)
+				|| (list != null && list.Length != signal.ParameterCount))
 				{	
+					var argumentCount = list == null ? 0 : list.Length;
 					isInvoking = false;
-					throw new InvalidOperationException ($"Incorrect number of arguments passed to Invoke(). Please make sure to provide arguments for all parameters defined by { signal.GetType().Name }");
+					throw new ArgumentException ($"Incorrect number of arguments passed to 'Invoke<{ signal.GetType().Name }>(...)'. Expected {signal.ParameterCount} argument(s) but you provided {argumentCount} (or null).");
 				}
 
 				try
 				{
-					((T)signal).Invoke(list);
+					((T)signal).Invoke(this, list);
 				}
-				catch(InvalidCastException e)
+				catch(Exception)
 				{
 					isInvoking = false;
-					if (e.TargetSite.Name == "Invoke")
+					var methodBase = new System.Diagnostics.StackFrame(0).GetMethod();
+					if (methodBase.Name == "Invoke" && list != null)
 					{
-						throw new InvalidCastException($"Invoke() argument was an invalid type. It did not match the parameter type defined in the Signal.\nPlease check your Invoke() argument(s) to see that they match the parameter(s) defined by { signal.GetType().Name }");
+						// For any exception that hapend during our Invoke() call (but not whatever it invoked), catch it
+						// and see if it was something to do with parameter type missmatch.
+						var typeMissmatchMessage = string.Empty;
+						var argumentTypes = new Type [list.Length];
+						for(int i=0; i<list.Length; i++)
+						{
+							argumentTypes[i] = list[i] == null ? typeof(object) : list[i].GetType();
+						}
+
+						var parameterIndex = 0;
+						if (signal.TryGetParameterErrorMessage(argumentTypes, out typeMissmatchMessage, out parameterIndex))
+							throw new ArgumentException($"Incorrect argument type passed to `Invoke<{ signal.GetType().Name }>(...)`. { typeMissmatchMessage } The { ToOrdinal(parameterIndex+1) } argument of the Invoke(...) does not match what is defined by '{ signal.GetType().Name }'.");
+						else
+							throw;
 					}
 					else
 					{
@@ -221,13 +271,15 @@ namespace SimpleSignals
 						// target site of the exception.
 						throw;
 					}
-				}				
+				}
 			}
 			isInvoking = false;
 
 			// If objects were unbound during the invoke, now's the time to unbind them
-			if (this.objectsToUnbind.Count > 0 ) {
-				foreach (var obj in this.objectsToUnbind) {
+			if (this.objectsToUnbind.Count > 0 )
+			{
+				foreach (var obj in this.objectsToUnbind)
+				{
 					this.UnbindSignals(obj);
 				}
 				objectsToUnbind.Clear();
@@ -259,9 +311,12 @@ namespace SimpleSignals
 		{
 			if(signalManager != null)
 			{
-				if (signalManager.isInvoking) {
+				if (signalManager.isInvoking)
+				{
 					signalManager.objectsToUnbind.Add(listenerObject);
-				} else {
+				}
+				else
+				{
 					signalManager.UnbindSignals(listenerObject);
 				}
 			}
@@ -310,32 +365,50 @@ namespace SimpleSignals
 				// Should be only one ListenToAttribute since they are exclusive (if there is one at all)
 				foreach(ListenTo listenTo in listenerBindings)
 				{
-                    //Debug.Log("ListenToAttribute:" + listenTo.SignalType);
+                    // Debug.Log("ListenToAttribute:" + listenTo.SignalType);
 					// Get an ISignal reference from the signalContext based on the SignalType
 					ISignal signal = this.SignalContext.GetSignal(listenTo.SignalType);
 					if(signal != null)
 					{
+						var methodParameterCount = methodInfo.GetParameters().Length;
+						if (methodParameterCount != signal.ParameterCount)
+							throw new ArgumentException( $"Incorrect number of parameters found when binding [ListenTo(typeof({ signal.GetType().Name })]. Expected to find {signal.ParameterCount} parameter(s) but found { methodParameterCount }.");
+
+						Delegate d = null;
 						try
 						{
 							// Create a callback listener for this methodInfo
-							Delegate d = Delegate.CreateDelegate(signal.GetListenerType(), listenerObject, methodInfo);
-							signal.AddListener(d, listenTo.ListenerType);
-
-							// Add the signal listener to the internal list of delegates associated with the listenerObject
-							// ( so we can easily unbind all the signal listeners later. )
-							List<SignalListener> delegateList = null;
-							if(this.signalListenersByObject.TryGetValue(listenerObject, out delegateList) == false)
-							{
-				    			//Debug.Log("adding signal listener:" + methodInfo.Name + " for " + listenerObjectType);
-								delegateList = new List<SignalListener>();
-								this.signalListenersByObject[listenerObject] = delegateList;
-							}
-							delegateList.Add(new SignalListener(signal, d));
+							d = Delegate.CreateDelegate(signal.GetListenerType(), listenerObject, methodInfo);
 						}
 						catch (ArgumentException)
 						{
-							throw new InvalidOperationException($"SignalManager was unable to bind the [ListenTo(typeof({ listenTo.SignalType }))]\nThe method exposes the wrong number of parameters, expected { signal.ParameterCount } but found { methodInfo.GetParameters().Count() }.");
+							var parameters = methodInfo.GetParameters();
+							var parameterTypes = new Type [parameters.Length];
+							for(int i=0; i<parameters.Length; i++)
+							{
+								parameterTypes[i] = parameters[i].ParameterType;
+							}
+
+							var typeMissmatchMessage = string.Empty;
+							var parameterIndex = 0;
+							if (signal.TryGetParameterErrorMessage(parameterTypes, out typeMissmatchMessage, out parameterIndex))
+								throw new ArgumentException($"Incorrect parameter type while binding listener method `{ methodInfo.DeclaringType.Name }.{ methodInfo.Name }`. { typeMissmatchMessage } The { ToOrdinal(parameterIndex+1) } parameter in the listener method does not match what is defined by the Signal.");
+							else
+								throw;
 						}
+
+						signal.AddListener(d, listenTo.ListenerType);
+
+						// Add the signal listener to the internal list of delegates associated with the listenerObject
+						// ( so we can easily unbind all the signal listeners later. )
+						List<SignalListener> delegateList = null;
+						if(this.signalListenersByObject.TryGetValue(listenerObject, out delegateList) == false)
+						{
+							//Debug.Log("adding signal listener:" + methodInfo.Name + " for " + listenerObjectType);
+							delegateList = new List<SignalListener>();
+							this.signalListenersByObject[listenerObject] = delegateList;
+						}
+						delegateList.Add(new SignalListener(signal, d));
 					}
 					else
 					{
@@ -373,6 +446,23 @@ namespace SimpleSignals
 				delegateList.Clear();
 			}
 		}
+
+		/// <summary>
+		/// Annoying to have to write, but it pretties up error messages.
+		/// </summary>
+		private string ToOrdinal(int num)
+		{
+			switch(num % 100) { case 11: case 12: case 13: return num.ToString() + "th"; }
+
+			switch(num % 10)
+			{
+				case 1: return num.ToString() + "st";
+				case 2: return num.ToString() + "nd";
+				case 3: return num.ToString() + "rd";
+				default:
+					return num.ToString() + "th";
+			}
+		}
 	}
 
 	/// <summary>
@@ -388,22 +478,21 @@ namespace SimpleSignals
 		{
 			if (signalType == null) 
 			{ 
-				throw new ArgumentNullException ("signalType is null"); 
+				throw new InvalidOperationException ("Cannont bind [ListenTo(null)] attribute, you must provide a valid Signal Type to listen to. For example [ListenTo(typeof(MySignal))]."); 
 			}
 
 			this.SignalType = signalType;
 			this.ListenerType = listenerType;
 			if(typeof(ISignal).IsAssignableFrom(this.SignalType) == false)
 			{
-				throw new Exception($"Attempted to ListenTo an unregistered signal type. Did you mean to [ListenTo(typeof({ this.SignalType })] ?");
+				throw new InvalidOperationException($"Attempted to ListenTo a type that doesn't derive from Signal. Did you mean to [ListenTo(typeof({ this.SignalType.Name })] ?");
 			}
 		}
 	}
 
 	public enum ListenerType
 	{
-		Every,
-		Once
+		Every, Once
 	}
 
 	public struct SignalListenerItem
@@ -417,6 +506,7 @@ namespace SimpleSignals
 		void AddListener(Delegate d, ListenerType t);
 		void RemoveListener(Delegate d);
 		Type GetListenerType();
+		bool TryGetParameterErrorMessage(Type [] paramsToValidate, out string typeMissmatchError, out int parameterIndex);
 		int ParameterCount { get; }
 	}
 
@@ -428,27 +518,55 @@ namespace SimpleSignals
 		protected List<SignalListenerItem> listeners = new List<SignalListenerItem> ();
 		protected List<SignalListenerItem> listenersToRemove = new List<SignalListenerItem>();
 
-		public void Invoke() 
+		public virtual bool TryGetParameterErrorMessage(Type [] paramsToValidate, out string typeMissmatchMessage, out int parameterIndex)
+		{
+			return TryGetParameterErrorMessage(paramsToValidate, new Type[] {}, out typeMissmatchMessage, out parameterIndex);
+		}
+
+		protected bool TryGetParameterErrorMessage(Type [] paramsToValidate, Type [] signalParameters, out string typeMissmatchMessage, out int parameterIndex)
+		{
+			parameterIndex = default(int);
+			typeMissmatchMessage = string.Empty;
+			
+			for(int i = 0; i < paramsToValidate.Length; i++)
+			{
+				parameterIndex = i;
+				var listenerParameterType = paramsToValidate[i];
+				var signalParameterType = signalParameters[i];
+
+				if (!listenerParameterType.IsAssignableFrom(signalParameterType)
+				|| listenerParameterType.IsValueType != signalParameterType.IsValueType)
+				{
+					var foundName = listenerParameterType.Name == "Object" ? "null" : listenerParameterType.Name;
+					typeMissmatchMessage = $"Expected '{ signalParameterType.Name }' but found '{ foundName }'.";
+					return true;
+				}
+			}
+			return false;
+		}
+
+		public void Invoke(SignalManager signalManager) 
 		{ 
 			foreach(var listener in listeners)
 			{ 
-				if(ValidateSignalListener(listener))
+				if(ValidateSignalListener(signalManager, listener))
 			 		((SignalDelegate)listener.SignalDelegate).Invoke(); 
 			} 
 
 			RemoveDiscardedSignalListenerItems();
 		}
 
-		virtual public void Invoke(params object[] list) { this.Invoke(); }
+		virtual public void Invoke(SignalManager signalManager, params object[] list)
+		{
+			this.Invoke(signalManager); 
+		}
 
 		public void AddListener(Delegate listener, ListenerType listenerType = ListenerType.Every) 
 		{ 
 			foreach(var listenerItem in this.listeners)
 			{
 				if(listenerItem.SignalDelegate.Target == listener.Target && listenerItem.SignalDelegate.Method == listener.Method)
-				{
 					throw new Exception($"Attempted to add a duplicate { listener.Method.Name } listener for { listener.Target }");
-				}
 			}
 			InternalAdd(listener, listenerType);
 		}
@@ -464,7 +582,7 @@ namespace SimpleSignals
 		/// only part of the code that is Unity specific. If you'd like to us SimpleSignals in 
 		/// a vanilla C# enviornment, this is the only method that needs to be tweaked.
 		/// </summary>
-		protected bool ValidateSignalListener(SignalListenerItem listener)
+		protected bool ValidateSignalListener(SignalManager signalManager, SignalListenerItem listener)
 		{
 			bool isInvokable = true;
 			object target = listener.SignalDelegate.Target;
@@ -479,7 +597,7 @@ namespace SimpleSignals
 				if( targetGO == null && !ReferenceEquals(targetGO, null))
 				{
 					isInvokable = false;
-					this.listenersToRemove.Add(listener);
+					SignalManager.UnbindSignals(signalManager, targetGO);
 				}
 			}
 			// </UnitySpecific>
@@ -525,22 +643,35 @@ namespace SimpleSignals
 	{
 		new public delegate void SignalDelegate(T param1);
 		override public int ParameterCount { get { return 1;} }
-		public void Invoke(T param1) 
+		override public bool TryGetParameterErrorMessage(Type [] paramToValidate, out string typeMissmatchError, out int parameterIndex)
+		{
+			return TryGetParameterErrorMessage(paramToValidate, new Type[] { typeof(T) }, out typeMissmatchError, out parameterIndex);
+		}
+		public void Invoke(SignalManager signalManager, T param1) 
 		{ 
 			foreach(var listener in listeners)
 			{ 
-				if(ValidateSignalListener(listener))
+				if(ValidateSignalListener(signalManager, listener))
 			 		((SignalDelegate)listener.SignalDelegate).Invoke(param1); 
 			}
 
 			RemoveDiscardedSignalListenerItems();
 		}
-		override public void Invoke(params object[] list) 
+		override public void Invoke(SignalManager signlaManager, params object[] list) 
 		{
 			if (list != null)
-				this.Invoke((T)list[0]); 
-			else
-				this.Invoke(default(T));
+			{
+				this.Invoke(signlaManager, (T)list[0]); 
+			}
+			else 
+			{
+				var t = typeof(T);
+				if (t.IsValueType == false)
+					this.Invoke(signlaManager, default(T));
+				else
+					throw new ArgumentException($"Incorrect argument type passed to `Invoke<{ this.GetType().Name }>(...)`. Expected `{ t.Name }` but found 'null'. The argument type provided to Invoke(...) does not match what is defined by '{ this.GetType().Name }'.");
+				
+			}
 		}
 		override protected void InternalAdd(Delegate listener, ListenerType listenerType){ this.listeners.Add(new SignalListenerItem() { SignalDelegate=(SignalDelegate)listener, ListenerType=listenerType});}
 		override public Type GetListenerType() { return typeof(SignalDelegate); }
@@ -551,35 +682,17 @@ namespace SimpleSignals
 	{
 		new public delegate void SignalDelegate(T1 param1,T2 param2);
 		override public int ParameterCount { get { return 2;} }
-		public void Invoke(T1 param1,T2 param2) 
+		public void Invoke(SignalManager signalManager, T1 param1,T2 param2) 
 		{ 
 			foreach(var listener in listeners)
 			{ 
-				if(ValidateSignalListener(listener)) 
+				if(ValidateSignalListener(signalManager, listener)) 
 					((SignalDelegate)listener.SignalDelegate).Invoke(param1,param2); 
 			}
 			RemoveDiscardedSignalListenerItems();
 		}
-
-		override public void Invoke(params object[] list) 
-		{
-			if (list != null)
-			{
-				T1 arg1; T2 arg2;
-				try { arg1 = (T1)list[0]; arg2 = (T2)list[1];}
-				catch (NullReferenceException)
-				{
-					throw new ArgumentException($"You provided a NULL argument for a prameter than cannot be null.\nCheck your Invoke<{ this.GetType().ToString() }>() arguments and make sure you're not passing NULL for a parameter with a value type.");
-				}
-				catch(IndexOutOfRangeException)
-				{
-					throw new ArgumentException($"Incorrect number of arguments provided to Invoke<{ GetType() }>().\nExpected { ParameterCount } arguments but { list.Length } arguments were provided.");
-				}
-				this.Invoke(arg1, arg2);
-			}
-			else
-				this.Invoke(default(T1), default(T2));
-		}
+		override public bool TryGetParameterErrorMessage(Type [] paramsToValidate, out string typeMissmatchError, out int parameterIndex) { return TryGetParameterErrorMessage(paramsToValidate, new Type[] { typeof(T1), typeof(T2) }, out typeMissmatchError, out parameterIndex); }		
+		override public void Invoke(SignalManager signalManager, params object[] list) { this.Invoke(signalManager, (T1)list[0], (T2)list[1]); }
 		override protected void InternalAdd(Delegate listener, ListenerType listenerType){ this.listeners.Add(new SignalListenerItem() { SignalDelegate=(SignalDelegate)listener, ListenerType=listenerType});}
 		override public Type GetListenerType() { return typeof(SignalDelegate); }
 	}
@@ -589,34 +702,17 @@ namespace SimpleSignals
 	{
 		new public delegate void SignalDelegate(T1 param1,T2 param2,T3 param3);
 		override public int ParameterCount { get { return 3;} }
-		public void Invoke(T1 param1, T2 param2, T3 param3) 
+		public void Invoke(SignalManager signalManager, T1 param1, T2 param2, T3 param3) 
 		{ 
 			foreach(var listener in listeners)
 			{ 
-				if(ValidateSignalListener(listener)) 
+				if(ValidateSignalListener(signalManager, listener)) 
 					((SignalDelegate)listener.SignalDelegate).Invoke(param1,param2,param3); 
 			}
 			RemoveDiscardedSignalListenerItems();
 		}
-		override public void Invoke(params object[] list) 
-		{
-			if (list != null)
-			{
-				T1 arg1; T2 arg2; T3 arg3;
-				try { arg1 = (T1)list[0]; arg2 = (T2)list[1]; arg3 = (T3)list[2]; }
-				catch (NullReferenceException)
-				{
-					throw new ArgumentException($"You provided a NULL argument for a prameter than cannot be null.\nCheck your Invoke<{ this.GetType().ToString() }>() arguments and make sure you're not passing NULL for a parameter with a value type.");
-				}
-				catch(IndexOutOfRangeException)
-				{
-					throw new ArgumentException($"Incorrect number of arguments provided to Invoke<{ GetType() }>().\nExpected { ParameterCount } arguments but { list.Length } arguments were provided.");
-				}
-				this.Invoke(arg1, arg2, arg3);
-			}
-			else
-				this.Invoke(default(T1), default(T2), default(T3));
-		}
+		override public bool TryGetParameterErrorMessage(Type [] paramsToValidate, out string typeMissmatchError, out int parameterIndex) { return TryGetParameterErrorMessage(paramsToValidate, new Type[] { typeof(T1), typeof(T2), typeof(T3) }, out typeMissmatchError, out parameterIndex); }
+		override public void Invoke(SignalManager signalManager, params object[] list) { this.Invoke(signalManager, (T1)list[0], (T2)list[1], (T3)list[2]); }
 		override protected void InternalAdd(Delegate listener, ListenerType listenerType){ this.listeners.Add(new SignalListenerItem() { SignalDelegate=(SignalDelegate)listener, ListenerType=listenerType});}
 		override public Type GetListenerType() { return typeof(SignalDelegate); }
 	}
@@ -626,34 +722,17 @@ namespace SimpleSignals
 	{
 		new public delegate void SignalDelegate(T1 param1,T2 param2,T3 param3,T4 param4);
 		override public int ParameterCount { get { return 4;} }
-		public void Invoke(T1 param1,T2 param2,T3 param3,T4 param4) 
+		public void Invoke(SignalManager signalManager, T1 param1,T2 param2,T3 param3,T4 param4) 
 		{ 
 			foreach(var listener in listeners)
 			{ 
-				if(ValidateSignalListener(listener)) 
+				if(ValidateSignalListener(signalManager, listener)) 
 					((SignalDelegate)listener.SignalDelegate).Invoke(param1,param2,param3,param4); 
 			}
 			RemoveDiscardedSignalListenerItems();
 		}
-		override public void Invoke(params object[] list)
-		{
-			if (list != null)
-			{
-				T1 arg1; T2 arg2; T3 arg3; T4 arg4;
-				try { arg1 = (T1)list[0]; arg2 = (T2)list[1]; arg3 = (T3)list[2]; arg4 = (T4)list[3]; }
-				catch (NullReferenceException)
-				{
-					throw new ArgumentException($"You provided a NULL argument for a prameter than cannot be null.\nCheck your Invoke<{ this.GetType().ToString() }>() arguments and make sure you're not passing NULL for a parameter with a value type.");
-				}
-				catch(IndexOutOfRangeException)
-				{
-					throw new ArgumentException($"Incorrect number of arguments provided to Invoke<{ GetType() }>().\nExpected { ParameterCount } arguments but { list.Length } arguments were provided.");
-				}
-				this.Invoke(arg1, arg2, arg3, arg4);
-			}
-			else
-				this.Invoke(default(T1), default(T2), default(T3), default(T4));
-		}
+		override public bool TryGetParameterErrorMessage(Type [] paramsToValidate, out string typeMissmatchError, out int parameterIndex) { return TryGetParameterErrorMessage(paramsToValidate, new Type[] { typeof(T1), typeof(T2), typeof(T3), typeof(T4) }, out typeMissmatchError, out parameterIndex); }
+		override public void Invoke(SignalManager signalManager, params object[] list){ this.Invoke(signalManager, (T1)list[0], (T2)list[1], (T3)list[2], (T4)list[3]); }
 		override protected void InternalAdd(Delegate listener, ListenerType listenerType){ this.listeners.Add(new SignalListenerItem() { SignalDelegate=(SignalDelegate)listener, ListenerType=listenerType});}
 		override public Type GetListenerType() { return typeof(SignalDelegate); }
 	}
